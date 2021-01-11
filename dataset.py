@@ -13,9 +13,9 @@ def resample_pcd(pcd, n):
     if idx.shape[0] < n:
         idx = np.concatenate([idx, np.random.randint(pcd.shape[0], size = n - pcd.shape[0])])
     return pcd[idx[:n]]
-           
-class ShapeNet(data.Dataset): 
-    def __init__(self, train = True, npoints = 8192):
+
+class ShapeNet(data.Dataset):
+    def __init__(self, train=True, npoints=8192):
         if train:
             self.list_path = './data/train.list'
         else:
@@ -38,7 +38,7 @@ class ShapeNet(data.Dataset):
             partial = read_pcd(os.path.join("./data/train/", model_id + '_%d_denoised.pcd' % scan_id))
         else:
             partial = read_pcd(os.path.join("./data/val/", model_id + '_%d_denoised.pcd' % scan_id))
-        complete = read_pcd(os.path.join("./data/complete/", '%s.pcd' % model_id))       
+        complete = read_pcd(os.path.join("./data/complete/", '%s.pcd' % model_id))
         return model_id, resample_pcd(partial, 5000), resample_pcd(complete, self.npoints)
 
     def __len__(self):
