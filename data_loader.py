@@ -4,8 +4,8 @@ import os
 from torch.utils.data import Dataset
 import trans
 import h5py
-from operations import furthest_point_sample
 warnings.filterwarnings('ignore')
+
 
 def pc_normalize(pc):
 	pmax = np.max(pc, axis=0)
@@ -13,12 +13,16 @@ def pc_normalize(pc):
 	centroid = (pmax + pmin) / 2.0
 	return - centroid
 
+
 class DataLoader(Dataset):
-	def __init__(self, root, npoint=2048, split='train', isrotate=False, category=['02691156']):
+	def __init__(self, root, npoint=2048, split='train', isrotate=False,
+			category=['02691156'], debug=False):
 		self.npoints = npoint
 		self.split = split
 		self.isrotate = isrotate
 		limit_item = 200000
+		if debug:
+			limit_item = 100
 
 		if split != 'real':
 			in_pts1 = np.zeros(shape=(0, 2048, 3))
@@ -152,7 +156,8 @@ class DataLoader(Dataset):
 
 		if self.split != 'real':
 			# return in_pts1, in_pts2, gt_pts1, gt_pts2, gt_pts31, gt_pts32, gt_para12_r, gt_para12_t, gt_para21_r, gt_para21_t, gt_para_canonical_1, gt_para_canonical_2, matrix1, matrix2
-			return in_pts1, in_pts2, gt_pts1, gt_pts2
+			return in_pts1, in_pts2, np.concatenate((in_pts1, gt_pts1), axis=0), \
+				np.concatenate((in_pts2, gt_pts2), axis=0)
 		else:
 			color_in_pts1 = self.in_ptss1[index,:int(self.npoints),3:]
 			color_in_pts2 = self.in_ptss2[index,:int(self.npoints),3:]
@@ -233,7 +238,7 @@ if __name__ == '__main__':
 				# np.savetxt('in_pts1.pts', in_pts1.cpu().numpy()[0])
 				# np.savetxt('in_pts2.pts', in_pts2.cpu().numpy()[0])
 				# np.savetxt('gt_pts1.pts', gt_pts1.cpu().numpy()[0])
-				# np.savetxt('gt_pts2.pts', gt_pts2.cpu().numpy()[0])				
+				# np.savetxt('gt_pts2.pts', gt_pts2.cpu().numpy()[0])
 				R21 = trans.quaternion2matrix(gt_para21_r[0])
 				T21 = trans.translation2matrix(gt_para21_t[0])
 				M21 = np.matmul(T21, R21)

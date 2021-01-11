@@ -25,7 +25,7 @@ class STN3d(nn.Module):
         self.relu = nn.ReLU()
 
     def forward(self, x):
-        batchsize = x.size()[0]
+        batchsize = len(x)
         x = F.relu(self.conv1(x))
         x = F.relu(self.conv2(x))
         x = F.relu(self.conv3(x))
@@ -58,7 +58,6 @@ class PointNetfeat(nn.Module):
         self.num_points = num_points
         self.global_feat = global_feat
     def forward(self, x):
-        batchsize = x.size()[0]
         x = F.relu(self.bn1(self.conv1(x)))
         x = F.relu(self.bn2(self.conv2(x)))
         x = self.bn3(self.conv3(x))
@@ -81,7 +80,6 @@ class PointGenCon(nn.Module):
         self.bn3 = torch.nn.BatchNorm1d(self.bottleneck_size//4)
 
     def forward(self, x):
-        batchsize = x.size()[0]
         x = F.relu(self.bn1(self.conv1(x)))
         x = F.relu(self.bn2(self.conv2(x)))
         x = F.relu(self.bn3(self.conv3(x)))
@@ -110,8 +108,7 @@ class PointNetRes(nn.Module):
         self.th = nn.Tanh()
 
     def forward(self, x):
-        batchsize = x.size()[0]
-        npoints = x.size()[2]
+        npoints = x.shape[2]
         x = F.relu(self.bn1(self.conv1(x)))
         pointfeat = x
         x = F.relu(self.bn2(self.conv2(x)))
