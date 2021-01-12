@@ -150,9 +150,9 @@ class MSN(nn.Module):
             y = torch.cat( (rand_grid, y), 1).contiguous()
             outs.append(self.decoder[i](y))
 
-        outs = torch.cat(outs,2).contiguous() 
-        out1 = outs.transpose(1, 2).contiguous() 
-        
+        outs = torch.cat(outs,2).contiguous()
+        out1 = outs.transpose(1, 2).contiguous()
+
         dist, _, mean_mst_dis = self.expansion(out1, self.num_points//self.n_primitives, 1.5)
         loss_mst = torch.mean(dist)
 
@@ -162,9 +162,9 @@ class MSN(nn.Module):
         partial = torch.cat( (partial, id1), 1)
         xx = torch.cat( (outs, partial), 2)
 
-        resampled_idx = MDS_module.minimum_density_sample(xx[:, 0:3, :].transpose(1, 2).contiguous(), out1.shape[1], mean_mst_dis) 
+        resampled_idx = MDS_module.minimum_density_sample(xx[:, 0:3, :].transpose(1, 2).contiguous(), out1.shape[1], mean_mst_dis)
         xx = MDS_module.gather_operation(xx, resampled_idx)
         delta = self.res(xx)
-        xx = xx[:, 0:3, :] 
-        out2 = (xx + delta).transpose(2,1).contiguous()  
+        xx = xx[:, 0:3, :]
+        out2 = (xx + delta).transpose(2,1).contiguous()
         return out1, out2, loss_mst
