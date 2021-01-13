@@ -18,6 +18,7 @@ from chamfer import dist_chamfer_3D
 
 chamfer_distance = dist_chamfer_3D.chamfer_3DDist()
 
+
 def dist_cd(pc1, pc2):
     dist1, dist2, _, _ = chamfer_distance(pc1, pc2)
     return (torch.mean(dist1) + torch.mean(dist2)) / 2 * 100
@@ -25,7 +26,7 @@ def dist_cd(pc1, pc2):
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--batch_size', type=int, default=64,
+    parser.add_argument('--batch_size', type=int, default=36,
                         help='input batch size')
     parser.add_argument('--workers', type=int, default=4,
                         help='number of data loading workers')
@@ -67,7 +68,7 @@ def train_one_epoch(network, optimizer, dataloader, train_loss, vis):
     chamfer_total = 0
     for i, data in tqdm(enumerate(dataloader), total=len(dataloader),
                         smoothing=0.9):
-        optimizer.zero_grad()
+        # Load data
         input1, input2, gt1, gt2 = data
         input1 = input1.float().cuda()
         input2 = input2.float().cuda()
@@ -76,16 +77,23 @@ def train_one_epoch(network, optimizer, dataloader, train_loss, vis):
         input1 = input1.transpose(2, 1).contiguous()
         input2 = input2.transpose(2, 1).contiguous()
 
+        # Optimize for input1
+        optimizer.zero_grad()
         output11, output12, emd11, emd12, expansion_penalty1 = \
-            network(input1, gt1.contiguous(), 0.005, 50)
+            network(input1, gt1.contiguous(), 0.01, 100)
         output21, output22, emd21, emd22, expansion_penalty2 = \
-            network(input2, gt2.contiguous(), 0.005, 50)
+            network(input2, gt2.contiguous(), 0.01, 100)
         loss_net1 = emd11.mean() + emd12.mean() + expansion_penalty1.mean() * 0.1
         loss_net2 = emd21.mean() + emd22.mean() + expansion_penalty2.mean() * 0.1
-        loss_net_whole = (loss_net1 + loss_net2) / 2
-        loss_net_whole.backward()
-        train_loss.update((emd12.mean().item() + emd22.mean().item()) / 2)
+        loss_total = (loss_net1 + loss_net2) / 2
+        loss_total.backward()
         optimizer.step()
+
+        # Log
+        emd_total += (emd12.mean().item() + emd22.mean().item()) / 2
+        chamfer_total += (dist_cd(output12, gt1).item() +
+                          dist_cd(output22, gt2).item()) / 2
+        train_loss.update((emd12.mean().item() + emd22.mean().item()) / 2)
 
         if i % 10 == 0:
             idx = random.randint(0, input1.size()[0] - 1)
@@ -118,8 +126,6 @@ def train_one_epoch(network, optimizer, dataloader, train_loss, vis):
                             markersize=2,
                             ),
                         )
-        emd_total += (emd12.mean().item() + emd22.mean().item()) / 2
-        chamfer_total += (dist_cd(output12, gt1) + dist_cd(output22, gt2)) / 2
 
     emd = emd_total / len(dataloader)
     chamfer = chamfer_total / len(dataloader)
@@ -141,12 +147,14 @@ def evaluate(network, dataloader, val_loss, vis, precise=False):
         input2 = input2.transpose(2,1).contiguous()
 
         with torch.no_grad():
-            if precise:
-                eps = 0.002
-                n_iters = 10000
-            else:
-                eps = 0.004
-                n_iters = 3000
+            # if precise:
+            #     eps = 0.002
+            #     n_iters = 10000
+            # else:
+            #     eps = 0.004
+            #     n_iters = 3000
+            eps = 0.01
+            n_iters = 100
             output11, output12, emd11, emd12, expansion_penalty1 = \
                 network(input1, gt1.contiguous(), eps, n_iters)
             output21, output22, emd21, emd22, expansion_penalty2 = \
@@ -184,7 +192,9 @@ def evaluate(network, dataloader, val_loss, vis, precise=False):
                         ),
             )
         emd_total += (emd12.mean().item() + emd22.mean().item()) / 2
-        chamfer_total += (dist_cd(output12, gt1) + dist_cd(output22, gt2)) / 2
+        with torch.no_grad():
+            chamfer_total += (dist_cd(output12, gt1).item() +
+                              dist_cd(output22, gt2).item()) / 2
 
     emd = emd_total / len(dataloader)
     chamfer = chamfer_total / len(dataloader)
@@ -233,11 +243,13 @@ if __name__ == '__main__':
         torch.manual_seed(opt.manualSeed)
 
     ''' Initialize network '''
-    network = MSN(num_points = opt.out_num_points, n_primitives = opt.n_primitives)
-    if opt.multi_gpu:
+    network = MSN(num_points = opt.out_num_points,
+                  n_primitives = opt.n_primitives)
+    if opt.multi_gpu and torch.cuda.device_count() > 1:
         network = torch.nn.DataParallel(FullModel(network))
         network.cuda()
         model = network.module.model
+        opt.batch_size *= torch.cuda.device_count()
     else:
         network = FullModel(network)
         network.cuda()
@@ -307,7 +319,6 @@ if __name__ == '__main__':
         for epoch in range(opt.nepoch):
             #TRAIN MODE
             train_loss.reset()
-            # model.train()
 
             # learning rate schedule
             if epoch == 20:
@@ -353,6 +364,6 @@ if __name__ == '__main__':
             torch.save(model.state_dict(), '%s/network.pth' % (log_dir))
             print('Model saved.')
     else:
-        emd, chamfer = evaluate(network, dataloader_test, val_loss, vis, 
+        emd, chamfer = evaluate(network, dataloader_test, val_loss, vis,
                                 precise=True)
         print('Eval EMD: {} CD: {}'.format(emd, chamfer))
